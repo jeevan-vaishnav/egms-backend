@@ -1,0 +1,357 @@
+// ============================================================
+// EGMS - Electronic Grade Management System
+// University College of Science & Technology
+// ============================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// USER / AUTHENTICATION
+// ============================================================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+model User {
+  id       String @id @default(uuid()) @db.Uuid
+  email    String @unique @db.VarChar(255)
+  name     String @db.VarChar(255)
+  password String @db.VarChar(255)
+
+  emailVerifiedAt DateTime?
+  deletedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  status UserStatus @default(ACTIVE)
+
+  // Authentication / RBAC
+  roles              UserRole[]
+  emailVerifications EmailVerification[]
+  resetPasswords     ResetPassword[]
+
+  // Academic profiles
+  student  Student?
+  lecturer Lecturer?
+
+  @@index([email], name: "idx_user_email")
+  @@index([deletedAt], name: "idx_user_deleted_at")
+}
+
+// ============================================================
+// EMAIL VERIFICATION
+// ============================================================
+
+model EmailVerification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  token     String    @unique @db.VarChar(255)
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([token, usedAt])
+}
+
+// ============================================================
+// PASSWORD RESET
+// ============================================================
+
+model ResetPassword {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  token     String    @unique @db.VarChar(255)
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([token, usedAt])
+}
+
+// ============================================================
+// ROLE BASED ACCESS CONTROL
+// ============================================================
+
+model Role {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique @db.VarChar(255)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+// ============================================================
+// PERMISSION
+// ============================================================
+
+model Permission {
+  id    String @id @default(uuid()) @db.Uuid
+  name  String @unique @db.VarChar(255)
+  group String @db.VarChar(255)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roles RolePermission[]
+}
+
+// ============================================================
+// USER ↔ ROLE
+// ============================================================
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId], name: "idx_user_role_unique")
+}
+
+// ============================================================
+// ROLE ↔ PERMISSION
+// ============================================================
+
+model RolePermission {
+  id           String @id @default(uuid()) @db.Uuid
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId], name: "idx_role_permission_unique")
+}
+
+// ============================================================
+// DEPARTMENT
+// ============================================================
+
+model Department {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(50)
+  name String @unique @db.VarChar(255)
+
+  programs  Program[]
+  courses   Course[]
+  lecturers Lecturer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// PROGRAM
+// ============================================================
+
+model Program {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(50)
+  name String @db.VarChar(255)
+
+  departmentId String     @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  students Student[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([departmentId])
+}
+
+// ============================================================
+// ACADEMIC YEAR
+// ============================================================
+
+model AcademicYear {
+  id        String @id @default(uuid()) @db.Uuid
+  name      String @unique @db.VarChar(20)
+  startYear Int
+  endYear   Int
+
+  semesters Semester[]
+
+  createdAt DateTime @default(now())
+}
+
+// ============================================================
+// SEMESTER
+// ============================================================
+
+enum SemesterType {
+  FIRST
+  SECOND
+  SUMMER
+}
+
+model Semester {
+  id   String       @id @default(uuid()) @db.Uuid
+  name SemesterType
+
+  academicYearId String       @db.Uuid
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+
+  registrations CourseRegistration[]
+  assignments   LecturerAssignment[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([academicYearId, name])
+}
+
+// ============================================================
+// COURSE
+// ============================================================
+
+model Course {
+  id          String @id @default(uuid()) @db.Uuid
+  code        String @unique @db.VarChar(50)
+  title       String @db.VarChar(255)
+  creditUnits Int
+
+  departmentId String     @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  registrations CourseRegistration[]
+  assignments   LecturerAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([departmentId])
+}
+
+// ============================================================
+// STUDENT
+// ============================================================
+
+model Student {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Login account
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Academic identity
+  studentNumber String @unique @db.VarChar(50)
+
+  firstName String @db.VarChar(100)
+  lastName  String @db.VarChar(100)
+
+  // Academic program
+  programId String  @db.Uuid
+  program   Program @relation(fields: [programId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrations CourseRegistration[]
+
+  @@index([programId])
+}
+
+// ============================================================
+// LECTURER
+// ============================================================
+
+model Lecturer {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Login account
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Staff identity
+  staffNumber String @unique @db.VarChar(50)
+
+  // Department
+  departmentId String     @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments LecturerAssignment[]
+
+  @@index([departmentId])
+}
+
+// ============================================================
+// COURSE REGISTRATION
+// ============================================================
+
+model CourseRegistration {
+  id String @id @default(uuid()) @db.Uuid
+
+  studentId String  @db.Uuid
+  student   Student @relation(fields: [studentId], references: [id])
+
+  courseId String @db.Uuid
+  course   Course @relation(fields: [courseId], references: [id])
+
+  semesterId String   @db.Uuid
+  semester   Semester @relation(fields: [semesterId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, courseId, semesterId])
+  @@index([studentId])
+  @@index([courseId])
+  @@index([semesterId])
+}
+
+// ============================================================
+// LECTURER ASSIGNMENT
+// ============================================================
+
+model LecturerAssignment {
+  id String @id @default(uuid()) @db.Uuid
+
+  lecturerId String   @db.Uuid
+  lecturer   Lecturer @relation(fields: [lecturerId], references: [id])
+
+  courseId String @db.Uuid
+  course   Course @relation(fields: [courseId], references: [id])
+
+  semesterId String   @db.Uuid
+  semester   Semester @relation(fields: [semesterId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([lecturerId, courseId, semesterId])
+  @@index([lecturerId])
+  @@index([courseId])
+  @@index([semesterId])
+}
