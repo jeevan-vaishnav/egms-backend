@@ -1,0 +1,76 @@
+  // "baseUrl": "./",
+  {
+    "compilerOptions": {
+      "module": "nodenext",
+      "moduleResolution": "nodenext",
+      "resolvePackageJsonExports": true,
+      "esModuleInterop": true,
+      "isolatedModules": true,
+      "declaration": true,
+      "removeComments": true,
+      "emitDecoratorMetadata": true,
+      "experimentalDecorators": true,
+      "allowSyntheticDefaultImports": true,
+      "target": "ES2023",
+      "sourceMap": true,
+      "outDir": "./dist",
+      "rootDir": ".",
+      "incremental": true,
+      "skipLibCheck": true,
+      "strictNullChecks": true,
+      "forceConsistentCasingInFileNames": true,
+      "noImplicitAny": false,
+      "strictBindCallApply": false,
+      "noFallthroughCasesInSwitch": false,
+      "paths": {
+        /* Nest 12 ships ESM with an exports map whose "./*" -> "./*.js" rule no
+			   longer resolves the bare "@nestjs/common/interfaces" directory subpath.
+			   Packages still built for Nest 11 (@nestjs-modules/mailer, @nestjs/throttler,
+			   nestjs-i18n) import it that way, and without this shim their types silently
+			   degrade to `any` under moduleResolution: nodenext. Remove once those
+			   packages ship Nest 12 builds. */
+        "@nestjs/common/interfaces": [
+          "./node_modules/@nestjs/common/interfaces/index.d.ts"
+        ],
+        "@config": [
+          "./libs/config/src"
+        ],
+        "@config/*": [
+          "./libs/config/src/*"
+        ],
+        "@common": [
+          "./libs/common/src"
+        ],
+        "@common/*": [
+          "./libs/common/src/*"
+        ],
+        "@generated/*": [
+          "./generated/*"
+        ],
+        "@repositories": [
+          "./libs/repositories/src"
+        ],
+        "@repositories/*": [
+          "./libs/repositories/src/*"
+        ],
+        "@utils": [
+          "./libs/utils/src"
+        ],
+        "@utils/*": [
+          "./libs/utils/src/*"
+        ]
+      },
+      "typeRoots": [
+        "./node_modules/@types",
+        "./libs/common/src/types"
+      ]
+    },
+    "exclude": [
+      "node_modules",
+      "dist",
+      "build",
+      "coverage",
+      ".claude",
+      ".agents"
+    ]
+  }
