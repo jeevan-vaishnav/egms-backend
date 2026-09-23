@@ -324,6 +324,8 @@ model CourseRegistration {
   semesterId String   @db.Uuid
   semester   Semester @relation(fields: [semesterId], references: [id])
 
+  grade Grade?
+
   createdAt DateTime @default(now())
 
   @@unique([studentId, courseId, semesterId])
@@ -347,11 +349,86 @@ model LecturerAssignment {
 
   semesterId String   @db.Uuid
   semester   Semester @relation(fields: [semesterId], references: [id])
-
-  createdAt DateTime @default(now())
+  grades     Grade[]
+  createdAt  DateTime @default(now())
 
   @@unique([lecturerId, courseId, semesterId])
   @@index([lecturerId])
   @@index([courseId])
   @@index([semesterId])
+}
+
+enum GradeStatus {
+  DRAFT
+  SUBMITTED
+  HOD_REVIEW
+  HOD_RETURNED
+  HOD_APPROVED
+  DEAN_REVIEW
+  DEAN_RETURNED
+  DEAN_APPROVED
+  LOCKED
+}
+
+enum GradeComponentType {
+  ATTENDANCE
+  QUIZ
+  ASSIGNMENT
+  PROJECT
+  MIDTERM
+  FINAL
+}
+
+// ============================================================
+// GRADE
+// ============================================================
+
+model Grade {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Student's registered course
+  registrationId String             @unique @db.Uuid
+  registration   CourseRegistration @relation(fields: [registrationId], references: [id])
+
+  // Lecturer responsible for the course
+  assignmentId String             @db.Uuid
+  assignment   LecturerAssignment @relation(fields: [assignmentId], references: [id])
+
+  // Calculated result
+  totalScore  Decimal? @db.Decimal(5, 2)
+  letterGrade String?  @db.VarChar(5)
+
+  // Approval workflow
+  status GradeStatus @default(DRAFT)
+
+  submittedAt DateTime?
+  approvedAt  DateTime?
+  lockedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  components GradeComponent[]
+}
+
+// ============================================================
+// GRADE COMPONENT
+// ============================================================
+
+model GradeComponent {
+  id String @id @default(uuid()) @db.Uuid
+
+  gradeId String @db.Uuid
+  grade   Grade  @relation(fields: [gradeId], references: [id])
+
+  type GradeComponentType
+
+  // Example: score = 8, maxScore = 10
+  score    Decimal @db.Decimal(5, 2)
+  maxScore Decimal @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gradeId, type])
 }
