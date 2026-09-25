@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post, Res } from "@nestjs/common";
 import type { UserInformation } from "@repositories";
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { I18nService } from 'nestjs-i18n';
+
 import {
     ApiStandardResponses,
     ApiSuccessResponse,
@@ -19,6 +19,7 @@ import { EmailVerificationDto } from "./dto/email-verification.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordTokenValidationDto } from "./dto/reset-password-token-validation.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { I18nService } from "nestjs-i18n";
 
 @Controller('auth')
 @ApiTags("Auth")

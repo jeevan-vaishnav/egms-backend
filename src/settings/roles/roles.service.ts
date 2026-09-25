@@ -1,0 +1,196 @@
+import {
+	Injectable,
+	NotFoundException,
+	UnprocessableEntityException,
+} from "@nestjs/common";
+import { CreateRoleDto } from "./dto/create-role.dto";
+import { UpdateRoleDto } from "./dto/update-role.dto";
+import { prisma } from "@repositories";
+import { DatatableType, PaginationResponse } from "@common";
+import { RoleDetail, RoleList, RoleRepository } from "@repositories";
+import { I18nService } from "nestjs-i18n";
+import { CacheService, UserCache } from "@common";
+
+@Injectable()
+export class RolesService {
+	constructor(
+		private readonly i18n: I18nService,
+		private readonly cacheService: CacheService,
+	) {}
+
+	/* Drops the cached identity of every user holding this role. A role's
+	   permission set is part of what AuthStrategy caches per user, so changing
+	   or deleting the role has to invalidate all of its holders — not just the
+	   caller who made the change. */
+	private async invalidateRoleHolders(roleId: string): Promise<void> {
+		const holders = await prisma.userRole.findMany({
+			where: { roleId },
+			select: { userId: true },
+		});
+
+		await Promise.all(
+			holders.map((holder) => this.cacheService.del(UserCache(holder.userId))),
+		);
+	}
+
+	async create(createRoleDto: CreateRoleDto): Promise<void> {
+		const isNameExists = await prisma.role.findFirst({
+			where: { name: createRoleDto.name },
+		});
+
+		if (isNameExists) {
+			throw new UnprocessableEntityException({
+				message: this.i18n.t("message.role.name_exists"),
+				error: {
+					name: [this.i18n.t("message.role.name_exists")],
+				},
+			});
+		}
+
+		const permissionExists = await prisma.permission.findMany({
+			where: {
+				id: {
+					in: createRoleDto.permissionIds,
+				},
+			},
+		});
+
+		if (permissionExists.length !== createRoleDto.permissionIds.length) {
+			throw new UnprocessableEntityException({
+				message: this.i18n.t("message.role.permissions_invalid"),
+				error: {
+					permissionIds: [this.i18n.t("message.role.permissions_invalid")],
+				},
+			});
+		}
+
+		await prisma.$transaction(async (tx) => {
+			const role = await tx.role.create({
+				data: {
+					name: createRoleDto.name,
+				},
+			});
+
+			const rolePermissionsData = createRoleDto.permissionIds.map((pid) => ({
+				roleId: role.id,
+				permissionId: pid,
+			}));
+
+			await tx.rolePermission.createMany({
+				data: rolePermissionsData,
+			});
+		});
+	}
+
+	async findAll(
+		queryParam: DatatableType,
+	): Promise<PaginationResponse<RoleList>> {
+		return await RoleRepository().findAll(queryParam);
+	}
+
+	async findOne(id: string): Promise<RoleDetail> {
+		const role = await RoleRepository().findOne(id);
+		if (!role) {
+			throw new NotFoundException(this.i18n.t("message.role.not_found"));
+		}
+
+		return role;
+	}
+
+	async update(id: string, updateRoleDto: UpdateRoleDto): Promise<void> {
+		const roleExist = await prisma.role.findFirst({
+			where: { id },
+			select: { id: true },
+		});
+
+		if (!roleExist) {
+			throw new NotFoundException(this.i18n.t("message.role.not_found"));
+		}
+
+		const isNameExists = await prisma.role.findFirst({
+			where: {
+				name: updateRoleDto.name,
+				NOT: { id },
+			},
+			select: { id: true },
+		});
+
+		if (isNameExists) {
+			throw new UnprocessableEntityException({
+				message: this.i18n.t("message.role.name_exists"),
+				error: {
+					name: [this.i18n.t("message.role.name_exists")],
+				},
+			});
+		}
+
+		const permissionExists = await prisma.permission.findMany({
+			where: {
+				id: {
+					in: updateRoleDto.permissionIds,
+				},
+			},
+		});
+
+		if (permissionExists.length !== updateRoleDto.permissionIds.length) {
+			throw new UnprocessableEntityException({
+				message: this.i18n.t("message.role.permissions_invalid"),
+				error: {
+					permissionIds: [this.i18n.t("message.role.permissions_invalid")],
+				},
+			});
+		}
+
+		await prisma.$transaction(async (tx) => {
+			await tx.role.update({
+				where: { id },
+				data: { name: updateRoleDto.name },
+			});
+
+			await tx.rolePermission.deleteMany({
+				where: { roleId: id },
+			});
+
+			const rolePermissionsData = updateRoleDto.permissionIds.map((pid) => ({
+				roleId: id,
+				permissionId: pid,
+			}));
+
+			await tx.rolePermission.createMany({
+				data: rolePermissionsData,
+			});
+		});
+
+		await this.invalidateRoleHolders(id);
+	}
+
+	async remove(id: string): Promise<void> {
+		const roleExist = await prisma.role.findFirst({
+			where: { id },
+			select: { id: true },
+		});
+
+		if (!roleExist) {
+			throw new NotFoundException(this.i18n.t("message.role.not_found"));
+		}
+
+		/* Collected before the delete — the join rows are gone afterwards. */
+		const holders = await prisma.userRole.findMany({
+			where: { roleId: id },
+			select: { userId: true },
+		});
+
+		await prisma.$transaction(async (tx) => {
+			await tx.rolePermission.deleteMany({
+				where: { roleId: id },
+			});
+			await tx.role.delete({
+				where: { id },
+			});
+		});
+
+		await Promise.all(
+			holders.map((holder) => this.cacheService.del(UserCache(holder.userId))),
+		);
+	}
+}
