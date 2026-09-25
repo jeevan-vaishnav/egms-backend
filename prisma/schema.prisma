@@ -30,8 +30,8 @@ model User {
   password String @db.VarChar(255)
 
   emailVerifiedAt DateTime?
-  deletedAt       DateTime?
 
+  deletedAt       DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
