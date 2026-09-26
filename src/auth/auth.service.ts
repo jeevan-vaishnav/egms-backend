@@ -10,12 +10,6 @@ import {
     StrUtils,
 } from "@utils";
 import { CacheService, MailService, UserCache } from "@common";
-// import { RegisterDto } from "./dto/register.dto";
-// import { ResendEmailVerificationDto } from "./dto/resend-email-verification.dto";
-// import { EmailVerificationDto } from "./dto/email-verification.dto";
-// import { ForgotPasswordDto } from "./dto/forgot-password.dto";
-// import { ResetPasswordDto } from "./dto/reset-password.dto";
-// import { ResetPasswordTokenValidationDto } from "./dto/reset-password-token-validation.dto";
 import { getEnv } from "@config";
 import { I18nService } from "nestjs-i18n";
 import { RegisterDto } from "./dto/register.dto";
@@ -28,8 +22,7 @@ import { ResetPasswordDto } from "./dto/reset-password.dto";
 
 /* A real bcrypt hash of a value nobody holds. Compared against when the email
    does not resolve, purely so the failed-login path costs the same either way. */
-const TIMING_EQUALISER_HASH =
-    "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+const TIMING_EQUALISER_HASH = "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
 @Injectable()
 export class AuthService {
