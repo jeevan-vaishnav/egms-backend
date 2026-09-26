@@ -1,5 +1,6 @@
 // ============================================================
 // EGMS - Electronic Grade Management System
+// Multi-Tenant SaaS Platform
 // University College of Science & Technology
 // ============================================================
 
@@ -31,23 +32,27 @@ model User {
 
   emailVerifiedAt DateTime?
 
-  deletedAt       DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   status UserStatus @default(ACTIVE)
 
   // Authentication / RBAC
-  roles              UserRole[]
   emailVerifications EmailVerification[]
   resetPasswords     ResetPassword[]
 
+  // Multi-tenancy
+  memberships InstituteMembership[]
+  // Platform / RBAC
+  roles       UserRole[]
   // Academic profiles
-  student  Student?
-  lecturer Lecturer?
+  student     Student?
+  lecturer    Lecturer?
 
   @@index([email], name: "idx_user_email")
   @@index([deletedAt], name: "idx_user_deleted_at")
+  @@index([status], name: "idx_user_status")
 }
 
 // ============================================================
@@ -67,6 +72,7 @@ model EmailVerification {
   user User @relation(fields: [userId], references: [id])
 
   @@index([token, usedAt])
+  @@index([userId])
 }
 
 // ============================================================
@@ -86,6 +92,104 @@ model ResetPassword {
   user User @relation(fields: [userId], references: [id])
 
   @@index([token, usedAt])
+  @@index([userId])
+}
+
+// ============================================================
+// INSTITUTE / TENANT
+// ============================================================
+enum InstituteType {
+  SCHOOL
+  COLLEGE
+  UNIVERSITY
+}
+
+enum InstituteStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model Institute {
+  id     String          @id @default(uuid()) @db.Uuid
+  code   String          @unique @db.VarChar(50)
+  name   String          @db.VarChar(255)
+  type   InstituteType
+  status InstituteStatus @default(ACTIVE)
+
+  email   String? @db.VarChar(255)
+  phone   String? @db.VarChar(50)
+  address String? @db.VarChar(500)
+  country String? @db.VarChar(100)
+  state   String? @db.VarChar(100)
+  city    String? @db.VarChar(100)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Users belonging to this institute
+  memberships   InstituteMembership[]
+  // Subscription
+  subscriptions Subscription[]
+
+  // Academic structure
+  departments   Department[]
+  programs      Program[]
+  academicYears AcademicYear[]
+  courses       Course[]
+  students      Student[]
+  lecturers     Lecturer[]
+
+  @@index([status], name: "idx_institute_status")
+  @@index([type], name: "idx_institute_type")
+  @@index([deletedAt], name: "idx_institute_deleted_at")
+}
+
+// ============================================================
+// INSTITUTE MEMBERSHIP
+// ============================================================
+//
+// Connects a User to an Institute.
+//
+// Example:
+//
+// User: John
+//       ↓
+// Membership
+//       ↓
+// ABC School
+//
+// The same User can belong to another Institute later.
+//
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model InstituteMembership {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId      String @db.Uuid
+  instituteId String @db.Uuid
+
+  status MembershipStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  institute Institute @relation(fields: [instituteId], references: [id])
+
+  // Roles assigned within this institute
+  roles UserRole[]
+
+  @@unique([userId, instituteId], name: "idx_user_institute_membership")
+  @@index([userId], name: "idx_membership_user")
+  @@index([instituteId], name: "idx_membership_institute")
+  @@index([instituteId, status], name: "idx_membership_institute_status")
 }
 
 // ============================================================
@@ -96,10 +200,11 @@ model Role {
   id   String @id @default(uuid()) @db.Uuid
   name String @unique @db.VarChar(255)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  // Users assigned this role
   users       UserRole[]
+  // Permissions belonging to this role
   permissions RolePermission[]
 }
 
@@ -116,24 +221,42 @@ model Permission {
   updatedAt DateTime @updatedAt
 
   roles RolePermission[]
+
+  @@index([group], name: "idx_permission_group")
 }
 
 // ============================================================
 // USER ↔ ROLE
 // ============================================================
+//
+// A role assignment belongs to an InstituteMembership.
+//
+// Example:
+//
+// John
+//   ↓
+// ABC School Membership
+//   ↓
+// Institute Admin
+//
 
 model UserRole {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  roleId String @db.Uuid
+  id           String @id @default(uuid()) @db.Uuid
+  userId       String @db.Uuid
+  membershipId String @db.Uuid
+  roleId       String @db.Uuid
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user       User                @relation(fields: [userId], references: [id])
+  membership InstituteMembership @relation(fields: [membershipId], references: [id])
+
   role Role @relation(fields: [roleId], references: [id])
 
-  @@unique([userId, roleId], name: "idx_user_role_unique")
+  @@unique([membershipId, roleId], name: "idx_membership_role_unique")
+  @@index([userId], name: "idx_user_role_user")
+  @@index([roleId], name: "idx_user_role_role")
 }
 
 // ============================================================
@@ -155,13 +278,84 @@ model RolePermission {
 }
 
 // ============================================================
+// SUBSCRIPTION PLAN
+// ============================================================
+//
+// Defines what an institute's subscription allows.
+//
+model SubscriptionPlan {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique @db.VarChar(100)
+
+  description String? @db.VarChar(500)
+
+  // Usage limits
+  maxStudents  Int?
+  maxUsers     Int?
+  maxLecturers Int?
+
+  // API rate limit
+  apiRequestsPerMinute Int?
+
+  // Pricing
+  price    Decimal @db.Decimal(10, 2)
+  currency String  @default("USD") @db.VarChar(10)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive], name: "idx_plan_active")
+}
+
+// ============================================================
+// SUBSCRIPTION
+// ============================================================
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+model Subscription {
+  id String @id @default(uuid()) @db.Uuid
+
+  instituteId String @db.Uuid
+  planId      String @db.Uuid
+
+  status SubscriptionStatus @default(TRIAL)
+
+  startsAt DateTime
+  endsAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  institute Institute        @relation(fields: [instituteId], references: [id])
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([instituteId], name: "idx_subscription_institute")
+  @@index([status], name: "idx_subscription_status")
+  @@index([endsAt], name: "idx_subscription_ends_at")
+}
+
+// ============================================================
 // DEPARTMENT
 // ============================================================
 
 model Department {
   id   String @id @default(uuid()) @db.Uuid
-  code String @unique @db.VarChar(50)
-  name String @unique @db.VarChar(255)
+  code String @db.VarChar(50)
+  name String @db.VarChar(255)
+
+  instituteId String    @db.Uuid
+  institute   Institute @relation(fields: [instituteId], references: [id])
 
   programs  Program[]
   courses   Course[]
@@ -169,6 +363,11 @@ model Department {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Same code/name can exist in different institutes.
+  @@unique([instituteId, code], name: "idx_department_institute_code")
+  @@unique([instituteId, name], name: "idx_department_institute_name")
+  @@index([instituteId], name: "idx_department_institute")
 }
 
 // ============================================================
@@ -180,6 +379,9 @@ model Program {
   code String @unique @db.VarChar(50)
   name String @db.VarChar(255)
 
+  instituteId String    @db.Uuid
+  institute   Institute @relation(fields: [instituteId], references: [id])
+
   departmentId String     @db.Uuid
   department   Department @relation(fields: [departmentId], references: [id])
 
@@ -188,6 +390,9 @@ model Program {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([instituteId, code], name: "idx_program_institute_code")
+  @@index([instituteId], name: "idx_program_institute")
+  @@index([departmentId], name: "idx_program_department")
   @@index([departmentId])
 }
 
@@ -201,9 +406,15 @@ model AcademicYear {
   startYear Int
   endYear   Int
 
+  instituteId String    @db.Uuid
+  institute   Institute @relation(fields: [instituteId], references: [id])
+
   semesters Semester[]
 
   createdAt DateTime @default(now())
+
+  @@unique([instituteId, name], name: "idx_academic_year_institute_name")
+  @@index([instituteId], name: "idx_academic_year_institute")
 }
 
 // ============================================================
@@ -229,6 +440,7 @@ model Semester {
   createdAt DateTime @default(now())
 
   @@unique([academicYearId, name])
+  @@index([academicYearId], name: "idx_semester_academic_year")
 }
 
 // ============================================================
@@ -241,6 +453,9 @@ model Course {
   title       String @db.VarChar(255)
   creditUnits Int
 
+  instituteId String    @db.Uuid
+  institute   Institute @relation(fields: [instituteId], references: [id])
+
   departmentId String     @db.Uuid
   department   Department @relation(fields: [departmentId], references: [id])
 
@@ -250,7 +465,9 @@ model Course {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([departmentId])
+  @@unique([instituteId, code], name: "idx_course_institute_code")
+  @@index([instituteId], name: "idx_course_institute")
+  @@index([departmentId], name: "idx_course_department")
 }
 
 // ============================================================
@@ -263,6 +480,10 @@ model Student {
   // Login account
   userId String @unique @db.Uuid
   user   User   @relation(fields: [userId], references: [id])
+
+  // Institute / tenant
+  instituteId String    @db.Uuid
+  institute   Institute @relation(fields: [instituteId], references: [id])
 
   // Academic identity
   studentNumber String @unique @db.VarChar(50)
@@ -279,7 +500,9 @@ model Student {
 
   registrations CourseRegistration[]
 
-  @@index([programId])
+  @@unique([instituteId, studentNumber], name: "idx_student_institute_number")
+  @@index([instituteId], name: "idx_student_institute")
+  @@index([programId], name: "idx_student_program")
 }
 
 // ============================================================
@@ -293,8 +516,12 @@ model Lecturer {
   userId String @unique @db.Uuid
   user   User   @relation(fields: [userId], references: [id])
 
+  // Institute / tenant
+  instituteId String    @db.Uuid
+  institute   Institute @relation(fields: [instituteId], references: [id])
+
   // Staff identity
-  staffNumber String @unique @db.VarChar(50)
+  staffNumber String @db.VarChar(50)
 
   // Department
   departmentId String     @db.Uuid
@@ -305,7 +532,9 @@ model Lecturer {
 
   assignments LecturerAssignment[]
 
-  @@index([departmentId])
+  @@unique([instituteId, staffNumber], name: "idx_lecturer_institute_staff_number")
+  @@index([instituteId], name: "idx_lecturer_institute")
+  @@index([departmentId], name: "idx_lecturer_department")
 }
 
 // ============================================================
@@ -329,9 +558,9 @@ model CourseRegistration {
   createdAt DateTime @default(now())
 
   @@unique([studentId, courseId, semesterId])
-  @@index([studentId])
-  @@index([courseId])
-  @@index([semesterId])
+  @@index([studentId], name: "idx_registration_student")
+  @@index([courseId], name: "idx_registration_course")
+  @@index([semesterId], name: "idx_registration_semester")
 }
 
 // ============================================================
@@ -349,13 +578,15 @@ model LecturerAssignment {
 
   semesterId String   @db.Uuid
   semester   Semester @relation(fields: [semesterId], references: [id])
-  grades     Grade[]
-  createdAt  DateTime @default(now())
+
+  grades Grade[]
+
+  createdAt DateTime @default(now())
 
   @@unique([lecturerId, courseId, semesterId])
-  @@index([lecturerId])
-  @@index([courseId])
-  @@index([semesterId])
+  @@index([lecturerId], name: "idx_assignment_lecturer")
+  @@index([courseId], name: "idx_assignment_course")
+  @@index([semesterId], name: "idx_assignment_semester")
 }
 
 enum GradeStatus {
