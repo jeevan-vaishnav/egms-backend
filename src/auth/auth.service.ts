@@ -33,11 +33,8 @@ export class AuthService {
         private readonly i18n: I18nService,
     ) { }
 
-    async login(data: LoginDTO): Promise<{
-        user: UserInformation;
-        accessToken: string;
-        refreshToken: string;
-    }> {
+    async login(data: LoginDTO): Promise<{user: UserInformation;accessToken: string;refreshToken: string}> {
+
         const user = await UserRepository().findByMail(data.email);
 
         /* Verify the password before looking at account state, and answer an
@@ -47,8 +44,7 @@ export class AuthService {
        valid password. The dummy comparison keeps the response time for an
        unknown address in line with a real one, so timing does not leak what
        the message no longer does. */
-        const isPasswordValid = user
-            ? await HashUtils.compareHash(data.password, user.password)
+        const isPasswordValid = user ? await HashUtils.compareHash(data.password, user.password)
             : await HashUtils.compareHash(data.password, TIMING_EQUALISER_HASH);
 
         if (!user || !isPasswordValid) {
@@ -278,9 +274,7 @@ export class AuthService {
         });
     }
 
-    async isResetPasswordTokenValid(
-        data: ResetPasswordTokenValidationDto,
-    ): Promise<boolean> {
+    async isResetPasswordTokenValid(data: ResetPasswordTokenValidationDto): Promise<boolean> {
         const resetPassword = await prisma.resetPassword.findFirst({
             where: { token: data.token },
         });

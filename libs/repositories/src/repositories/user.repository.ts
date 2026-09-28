@@ -17,6 +17,15 @@ export interface UserInformation {
 	status: UserStatus;
 	createdAt: Date;
 	updatedAt: Date;
+	platformRoles: { name: string }[];
+	memberships: {
+		id: string;
+		instituteId: string;
+		instituteName: string;
+		status: string;
+		roles: { name: string; permissions: string[] }[];
+	}[];
+	/** Backward-compatible flattened roles. Guards use the current membership. */
 	roles: {
 		name: string;
 		permissions: string[];
@@ -31,10 +40,7 @@ export interface UserList {
 	status: UserStatus;
 	createdAt: Date;
 	updatedAt: Date;
-	roles: {
-		id: string;
-		name: string;
-	}[];
+	roles: { id: string; name: string }[];
 }
 
 export type UserDetail = Required<UserList>;
@@ -66,9 +72,7 @@ export function UserRepository(tx?: Prisma.TransactionClient) {
 	return {
 		user: db.user,
 
-		async findAll(
-			queryParam: DatatableType,
-		): Promise<PaginationResponse<UserList>> {
+		async findAll(queryParam: DatatableType, instituteId?: string): Promise<PaginationResponse<UserList>> {
 			const { page, limit, search, sort, sortDirection } = queryParam;
 			const finalLimit = Number(limit);
 			const finalPage = Number(page);
@@ -78,14 +82,14 @@ export function UserRepository(tx?: Prisma.TransactionClient) {
 			if (!userSortableFields.includes(sort)) {
 				throw new BadRequestException(
 					I18nContext.current()?.t("message.common.invalid_sort_field") ??
-						"Invalid sort field",
+					"Invalid sort field",
 				);
 			}
 
 			if (!sortDirectionAllowed.includes(sortDirection)) {
 				throw new BadRequestException(
 					I18nContext.current()?.t("message.common.invalid_sort_direction") ??
-						"Invalid sort direction",
+					"Invalid sort direction",
 				);
 			}
 
@@ -95,291 +99,130 @@ export function UserRepository(tx?: Prisma.TransactionClient) {
 					if (!userFilterableFields.includes(key)) {
 						throw new BadRequestException(
 							I18nContext.current()?.t("message.common.invalid_filter_field") ??
-								"Invalid filter field",
+							"Invalid filter field",
 						);
 					}
 				}
 			}
 
-			let whereCondition: Prisma.UserWhereInput = { deletedAt: null };
+			let whereCondition: Prisma.UserWhereInput[] = [{ deletedAt: null }];
+			if (instituteId) {
+				whereCondition.push({ memberships: { some: { instituteId, status: "ACTIVE" } } });
+			}
 			if (search) {
-				whereCondition = {
-					...whereCondition,
-					AND: [
-						{
-							OR: [
-								{ name: { contains: search, mode: "insensitive" } },
-								{ email: { contains: search, mode: "insensitive" } },
-							],
-						},
-					],
-				};
+				whereCondition.push({
+					OR: [
+						{ name: { contains: search, mode: "insensitive" } },
+						{ email: { contains: search, mode: "insensitive" } },
+					]
+				})
+
+				// whereCondition = {
+				// 	...whereCondition,
+				// 	AND: [
+				// 		{
+				// 			OR: [
+				// 				{ name: { contains: search, mode: "insensitive" } },
+				// 				{ email: { contains: search, mode: "insensitive" } },
+				// 			],
+				// 		},
+				// 	],
+				// };
 			}
 
-			let filterCondition: Prisma.UserWhereInput = { deletedAt: null };
-			if (queryParam.filter) {
-				if (queryParam.filter["status"]) {
+			// let filterCondition: Prisma.UserWhereInput = { deletedAt: null };
+			const filter = queryParam.filter;
+
+			if (filter?.status) {
+				if (filter.status) {
 					/* The key is allow-listed above; the value was not. An
 					   unrecognised member cast straight to the enum reaches
 					   Prisma and fails validation as a 500 — reject it here as
 					   the 400 the allow-list machinery exists to produce. */
-					const status = queryParam.filter["status"].toString();
+					const status = filter.status.toString();
 					if (!Object.values(UserStatus).includes(status as UserStatus)) {
 						throw new BadRequestException(
 							I18nContext.current()?.t("message.common.invalid_filter_field") ??
-								"Invalid filter field",
+							"Invalid filter field",
 						);
 					}
 
-					filterCondition = {
-						...filterCondition,
-						status: status as UserStatus,
-					};
+					// filterCondition = {
+					// 	...filterCondition,
+					// 	status: status as UserStatus,
+					// };
+					whereCondition.push({ status: status as UserStatus });
 				}
 
-				if (queryParam.filter["roles"]) {
-					const roles = queryParam.filter["roles"]
+				if (filter?.roles) {
+					const roles = filter.roles.toString()
 						.toString()
 						.split(",")
 						.map((role) => role.trim());
+					whereCondition.push({ roles: { some: { ...(instituteId ? { membership: { instituteId } } : {}), role: { name: { in: roles } } } } });
 
-					filterCondition = {
-						...filterCondition,
-						roles: {
-							some: {
-								role: {
-									name: {
-										in: roles,
-									},
-								},
-							},
-						},
-					};
 				}
 
-				if (queryParam.filter["name"]) {
-					filterCondition = {
-						...filterCondition,
-						name: {
-							contains: queryParam.filter["name"].toString(),
-							mode: "insensitive",
-						},
-					};
-				}
-
-				if (queryParam.filter["email"]) {
-					filterCondition = {
-						...filterCondition,
-						email: {
-							contains: queryParam.filter["email"].toString(),
-							mode: "insensitive",
-						},
-					};
-				}
-
-				if (
-					queryParam.filter["createdAt"] &&
-					typeof queryParam.filter["createdAt"] === "string"
-				) {
-					filterCondition = {
-						...filterCondition,
-						createdAt: parseDateRangeFilter(
-							queryParam.filter["createdAt"],
-							"createdAt",
-						),
-					};
-				}
-
-				if (
-					queryParam.filter["updatedAt"] &&
-					typeof queryParam.filter["updatedAt"] === "string"
-				) {
-					filterCondition = {
-						...filterCondition,
-						updatedAt: parseDateRangeFilter(
-							queryParam.filter["updatedAt"],
-							"updatedAt",
-						),
-					};
-				}
+				if (filter?.name) whereCondition.push({ name: { contains: filter.name.toString(), mode: "insensitive" } });
+				if (filter?.email) whereCondition.push({ email: { contains: filter.email.toString(), mode: "insensitive" } });
+				if (filter?.createdAt && typeof filter.createdAt === "string") whereCondition.push({ createdAt: parseDateRangeFilter(filter.createdAt, "createdAt") });
+				if (filter?.updatedAt && typeof filter.updatedAt === "string") whereCondition.push({ updatedAt: parseDateRangeFilter(filter.updatedAt, "updatedAt") });
 			}
 
-			const where: Prisma.UserWhereInput = {
-				AND: [whereCondition, filterCondition],
-			};
+
+			const where: Prisma.UserWhereInput = { AND: whereCondition };
 
 			const [totalCount, users] = await Promise.all([
 				db.user.count({ where }),
 				db.user.findMany({
-					where,
-					orderBy: { [sort]: sortDirection },
-					skip: (finalPage - 1) * finalLimit,
-					take: finalLimit,
+					where, orderBy: { [sort]: sortDirection }, skip: (finalPage - 1) * finalLimit, take: finalLimit,
 					select: {
-						id: true,
-						email: true,
-						name: true,
-						status: true,
-						createdAt: true,
-						updatedAt: true,
-						roles: {
-							select: {
-								role: {
-									select: {
-										id: true,
-										name: true,
-									},
-								},
-							},
-						},
+						id: true, email: true, name: true, status: true, createdAt: true, updatedAt: true,
+						roles: { where: instituteId ? { membership: { instituteId } } : undefined, select: { role: { select: { id: true, name: true } } } },
 					},
 				}),
 			]);
 
 			return {
-				data: users.map((user) => ({
-					id: user.id,
-					email: user.email,
-					name: user.name,
-					status: user.status,
-					createdAt: user.createdAt,
-					updatedAt: user.updatedAt,
-					roles: user.roles.map((userRole) => userRole.role),
-				})),
-				meta: {
-					limit: finalLimit,
-					page: finalPage,
-					totalCount,
-					totalPages: Math.ceil(totalCount / finalLimit),
-				},
+				data: users.map((user) => ({ ...user, roles: user.roles.map((r) => r.role) })),
+				meta: { limit: finalLimit, page: finalPage, totalCount, totalPages: Math.ceil(totalCount / finalLimit) },
 			};
 		},
 
-		async findOne(id: string): Promise<UserDetail | null> {
+		async findOne(id: string, instituteId?: string): Promise<UserDetail | null> {
 			const data = await db.user.findFirst({
-				where: { id, deletedAt: null },
-				select: {
-					id: true,
-					email: true,
-					name: true,
-					status: true,
-					createdAt: true,
-					updatedAt: true,
-					roles: {
-						select: {
-							role: {
-								select: {
-									id: true,
-									name: true,
-								},
-							},
-						},
-					},
-				},
+				where: { id, deletedAt: null, ...(instituteId ? { memberships: { some: { instituteId, status: "ACTIVE" } } } : {}) },
+				select: { id: true, email: true, name: true, status: true, createdAt: true, updatedAt: true, roles: { where: instituteId ? { membership: { instituteId } } : undefined, select: { role: { select: { id: true, name: true } } } } },
 			});
-
-			if (!data) {
-				return null;
-			}
-
-			return {
-				id: data.id,
-				email: data.email,
-				name: data.name,
-				status: data.status,
-				createdAt: data.createdAt,
-				updatedAt: data.updatedAt,
-				roles: data.roles.map((userRole) => userRole.role),
-			};
+			return data ? { ...data, roles: data.roles.map((r) => r.role) } : null;
 		},
 
-		async findByMail(email: string): Promise<{
-			id: string;
-			email: string;
-			name: string;
-			password: string;
-			status: UserStatus;
-			emailVerifiedAt: Date | null;
-			createdAt: Date;
-			updatedAt: Date;
-		} | null> {
-			return await db.user.findFirst({
-				where: { email, deletedAt: null },
-				select: {
-					id: true,
-					email: true,
-					name: true,
-					status: true,
-					password: true,
-					emailVerifiedAt: true,
-					createdAt: true,
-					updatedAt: true,
-				},
-			});
+		async findByMail(email: string) {
+			return db.user.findFirst({ where: { email, deletedAt: null }, select: { id: true, email: true, name: true, password: true, status: true, emailVerifiedAt: true, createdAt: true, updatedAt: true } });
 		},
 
 		async userInformation(userId: string): Promise<UserInformation | null> {
 			const user = await db.user.findUnique({
-				where: {
-					id: userId,
-					deletedAt: null,
-					emailVerifiedAt: { not: null },
-					status: UserStatus.ACTIVE,
-				},
+				where: { id: userId, deletedAt: null, emailVerifiedAt: { not: null }, status: UserStatus.ACTIVE },
 				select: {
-					id: true,
-					email: true,
-					name: true,
-					status: true,
-					createdAt: true,
-					updatedAt: true,
-					roles: {
-						select: {
-							role: {
-								select: {
-									name: true,
-									permissions: {
-										select: {
-											permission: {
-												select: {
-													name: true,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
+					id: true, email: true, name: true, status: true, createdAt: true, updatedAt: true,
+					platformRoles: { select: { role: { select: { name: true } } } },
+					memberships: {
+						where: { status: "ACTIVE" },
+						select: { id: true, instituteId: true, status: true, institute: { select: { name: true } }, roles: { select: { role: { select: { name: true, permissions: { select: { permission: { select: { name: true } } } } } } } } },
 					},
 				},
 			});
+			
+			if (!user) return null;
 
-			if (!user) {
-				return null;
-			}
-
-			const roles = user.roles.map((userRole) => ({
-				name: userRole.role.name,
-				permissions: userRole.role.permissions.map((rp) => rp.permission.name),
+			const memberships = user.memberships.map((membership) => ({
+				id: membership.id, instituteId: membership.instituteId, instituteName: membership.institute.name, status: membership.status,
+				roles: membership.roles.map((ur) => ({ name: ur.role.name, permissions: ur.role.permissions.map((rp) => rp.permission.name) })),
 			}));
-
-			const permissionsSet = new Set<string>();
-			roles.forEach((role) => {
-				role.permissions.forEach((permission) => {
-					permissionsSet.add(permission);
-				});
-			});
-
-			return {
-				id: user.id,
-				email: user.email,
-				name: user.name,
-				status: user.status,
-				createdAt: user.createdAt,
-				updatedAt: user.updatedAt,
-				roles,
-				permissions: Array.from(permissionsSet),
-			};
+			const roles = memberships.flatMap((m) => m.roles);
+			const permissions = Array.from(new Set(roles.flatMap((r) => r.permissions)));
+			return { ...user, platformRoles: user.platformRoles.map((r) => r.role), memberships, roles, permissions };
 		},
 	};
 }

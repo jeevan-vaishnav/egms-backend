@@ -16,7 +16,7 @@ export class RolesService {
 	constructor(
 		private readonly i18n: I18nService,
 		private readonly cacheService: CacheService,
-	) {}
+	) { }
 
 	/* Drops the cached identity of every user holding this role. A role's
 	   permission set is part of what AuthStrategy caches per user, so changing
@@ -53,9 +53,10 @@ export class RolesService {
 					in: createRoleDto.permissionIds,
 				},
 			},
+			select: { id: true }
 		});
 
-		if (permissionExists.length !== createRoleDto.permissionIds.length) {
+		if (permissionExists.length !== new Set(createRoleDto.permissionIds).size) {
 			throw new UnprocessableEntityException({
 				message: this.i18n.t("message.role.permissions_invalid"),
 				error: {
@@ -71,6 +72,9 @@ export class RolesService {
 				},
 			});
 
+			// if (dto.permissionIds.length) 
+			// await tx.rolePermission.createMany({ data: dto.permissionIds.map((permissionId) => ({ roleId: role.id, permissionId })) });
+
 			const rolePermissionsData = createRoleDto.permissionIds.map((pid) => ({
 				roleId: role.id,
 				permissionId: pid,
@@ -82,9 +86,7 @@ export class RolesService {
 		});
 	}
 
-	async findAll(
-		queryParam: DatatableType,
-	): Promise<PaginationResponse<RoleList>> {
+	async findAll(queryParam: DatatableType): Promise<PaginationResponse<RoleList>> {
 		return await RoleRepository().findAll(queryParam);
 	}
 
@@ -130,9 +132,10 @@ export class RolesService {
 					in: updateRoleDto.permissionIds,
 				},
 			},
+			select: { id: true }
 		});
 
-		if (permissionExists.length !== updateRoleDto.permissionIds.length) {
+		if (permissionExists.length !== new Set(updateRoleDto.permissionIds).size) {
 			throw new UnprocessableEntityException({
 				message: this.i18n.t("message.role.permissions_invalid"),
 				error: {
@@ -150,6 +153,10 @@ export class RolesService {
 			await tx.rolePermission.deleteMany({
 				where: { roleId: id },
 			});
+
+
+			// 		if (dto.permissionIds.length) await tx.rolePermission.createMany({ data: dto.permissionIds.map((permissionId) => ({ roleId: id, permissionId })) }); });
+			// await this.invalidateRoleHolders(id);
 
 			const rolePermissionsData = updateRoleDto.permissionIds.map((pid) => ({
 				roleId: id,

@@ -41,9 +41,7 @@ export function PermissionRepository(tx?: Prisma.TransactionClient) {
 	return {
 		permission: db.permission,
 
-		findAll: async (
-			queryParam: DatatableType,
-		): Promise<PaginationResponse<PermissionList>> => {
+		findAll: async (queryParam: DatatableType): Promise<PaginationResponse<PermissionList>> => {
 			const { page, limit, search, sort, sortDirection } = queryParam;
 			const finalLimit = Number(limit);
 			const finalPage = Number(page);

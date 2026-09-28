@@ -12,6 +12,10 @@
       "experimentalDecorators": true,
       "allowSyntheticDefaultImports": true,
       "target": "ES2023",
+      "types": [
+        "node",
+        "jest"
+      ],
       "sourceMap": true,
       "outDir": "./dist",
       "rootDir": ".",
@@ -71,6 +75,8 @@
       "build",
       "coverage",
       ".claude",
-      ".agents"
+      ".agents",
+      "**/*.spec.ts",
+      "test"
     ]
   }

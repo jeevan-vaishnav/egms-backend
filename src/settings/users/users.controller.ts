@@ -15,6 +15,8 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 
 import {
 	ApiStandardResponses,
+	CurrentInstituteId,
+	TenantRequired,
 	ApiSuccessResponse,
 	DatatableType,
 	DefaultApiNotFoundResponse,
@@ -38,13 +40,14 @@ import { userSortableFields, userFilterableFields } from "@repositories";
 import { I18nService } from "nestjs-i18n";
 
 @Controller("users")
+@TenantRequired()
 @ApiTags("Settings/Users")
 @ApiBearerAuth("Bearer")
 export class UsersController {
 	constructor(
 		private readonly usersService: UsersService,
 		private readonly i18n: I18nService,
-	) {}
+	) { }
 
 	@Post()
 	@PermissionAuth("user:create")
@@ -58,9 +61,9 @@ export class UsersController {
 			data: null,
 		},
 	})
-	async create(@Body() createUserDto: CreateUserDto, @Res() res: FastifyReply) {
+	async create(@Body() createUserDto: CreateUserDto, @CurrentInstituteId() instituteId: string, @Res() res: FastifyReply) {
 		try {
-			await this.usersService.create(createUserDto);
+			await this.usersService.create(createUserDto, instituteId);
 			return res
 				.status(201)
 				.send(
@@ -87,9 +90,9 @@ export class UsersController {
 			data: null,
 		},
 	})
-	async resendVerifyEmail(@Param("id") id: string, @Res() res: FastifyReply) {
+	async resendVerifyEmail(@Param("id") id: string, @CurrentInstituteId() instituteId: string, @Res() res: FastifyReply) {
 		try {
-			await this.usersService.resendVerificationEmail(id);
+			await this.usersService.resendVerificationEmail(id, instituteId);
 			return res
 				.status(200)
 				.send(
@@ -139,6 +142,7 @@ export class UsersController {
 		@Query("sortDirection") sortDirection: string,
 		@Query(new FilterValidationPipe())
 		filter: Record<string, string | boolean | Date> | null,
+		@CurrentInstituteId() instituteId: string,
 		@Res() res: FastifyReply,
 	) {
 		try {
@@ -151,7 +155,7 @@ export class UsersController {
 				filter: filter || null,
 			};
 
-			const users = await this.usersService.findAll(query);
+			const users = await this.usersService.findAll(query, instituteId);
 			return res
 				.status(200)
 				.send(
@@ -179,18 +183,16 @@ export class UsersController {
 		roles: ["admin"],
 	})
 	@DefaultApiNotFoundResponse()
-	async findOne(@Param("id") id: string, @Res() res: FastifyReply) {
+	async findOne(@Param("id") id: string, @CurrentInstituteId() instituteId: string, @Res() res: FastifyReply) {
 		try {
-			const user = await this.usersService.findOne(id);
-			return res
-				.status(200)
-				.send(
-					ResponseHandler.success(
-						200,
-						this.i18n.t("message.user.found_success"),
-						user,
-					),
-				);
+			const user = await this.usersService.findOne(id, instituteId);
+			return res.status(200).send(
+				ResponseHandler.success(
+					200,
+					this.i18n.t("message.user.found_success"),
+					user,
+				),
+			);
 		} catch (error) {
 			return ResponseHandler.handleError(res, error);
 		}
@@ -206,12 +208,12 @@ export class UsersController {
 	async update(
 		@Param("id") id: string,
 		@Body() updateUserDto: UpdateUserDto,
+		@CurrentInstituteId() instituteId: string,
 		@Res() res: FastifyReply,
 	) {
 		try {
-			await this.usersService.update(id, updateUserDto);
-			return res
-				.status(200)
+			await this.usersService.update(id, updateUserDto, instituteId);
+			return res.status(200)
 				.send(
 					ResponseHandler.success<void>(
 						200,
@@ -234,10 +236,11 @@ export class UsersController {
 	async updateStatus(
 		@Param("id") id: string,
 		@Body() updateStatusDto: UpdateStatusDto,
+		@CurrentInstituteId() instituteId: string,
 		@Res() res: FastifyReply,
 	) {
 		try {
-			await this.usersService.updateStatus(id, updateStatusDto);
+			await this.usersService.updateStatus(id, updateStatusDto, instituteId);
 			return res
 				.status(200)
 				.send(
@@ -253,7 +256,7 @@ export class UsersController {
 	}
 
 	@Patch(":id/password")
-	@RoleAuth("superuser")
+	@RoleAuth("SUPER_ADMIN")
 	@ApiStandardResponses({})
 	@ApiSuccessResponse(200, "User password updated successfully", null, {
 		type: "null",
@@ -262,10 +265,11 @@ export class UsersController {
 	async updatePassword(
 		@Param("id") id: string,
 		@Body() updatePasswordDto: UpdatePasswordDto,
+		@CurrentInstituteId() instituteId: string,
 		@Res() res: FastifyReply,
 	) {
 		try {
-			await this.usersService.updatePassword(id, updatePasswordDto);
+			await this.usersService.updatePassword(id, updatePasswordDto, instituteId);
 			return res
 				.status(200)
 				.send(
@@ -289,9 +293,9 @@ export class UsersController {
 		type: "null",
 	})
 	@DefaultApiNotFoundResponse()
-	async remove(@Param("id") id: string, @Res() res: FastifyReply) {
+	async remove(@Param("id") id: string, @CurrentInstituteId() instituteId: string, @Res() res: FastifyReply) {
 		try {
-			await this.usersService.remove(id);
+			await this.usersService.remove(id, instituteId);
 			return res
 				.status(200)
 				.send(

@@ -34,7 +34,7 @@ import {
 import { I18nService } from "nestjs-i18n";
 
 @Controller("permissions")
-@RoleAuth("superuser")
+@RoleAuth("SUPER_ADMIN")
 @ApiTags("Settings/Permissions")
 @ApiBearerAuth("Bearer")
 export class PermissionsController {
@@ -48,10 +48,7 @@ export class PermissionsController {
 		type: "null",
 	})
 	@ApiStandardResponses()
-	async create(
-		@Body() createPermissionDto: CreatePermissionDto,
-		@Res() res: FastifyReply,
-	) {
+	async create(@Body() createPermissionDto: CreatePermissionDto,@Res() res: FastifyReply) {
 		try {
 			await this.permissionsService.create(createPermissionDto);
 			return res
@@ -146,8 +143,7 @@ export class PermissionsController {
 				sortDirection: sortDirection === "asc" ? "asc" : "desc",
 				filter: filter || null,
 			};
-			const result: PaginationResponse<PermissionList> =
-				await this.permissionsService.findAll(query);
+			const result: PaginationResponse<PermissionList> = await this.permissionsService.findAll(query);
 
 			return res
 				.status(200)

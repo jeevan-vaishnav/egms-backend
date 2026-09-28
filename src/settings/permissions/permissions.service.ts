@@ -26,9 +26,7 @@ export class PermissionsService {
 		});
 	}
 
-	async findAll(
-		query: DatatableType,
-	): Promise<PaginationResponse<PermissionList>> {
+	async findAll(query: DatatableType): Promise<PaginationResponse<PermissionList>> {
 		return await PermissionRepository().findAll(query);
 	}
 
@@ -43,10 +41,7 @@ export class PermissionsService {
 		return data;
 	}
 
-	async update(
-		id: string,
-		updatePermissionDto: UpdatePermissionDto,
-	): Promise<void> {
+	async update(id: string,updatePermissionDto: UpdatePermissionDto): Promise<void> {
 		await prisma.$transaction(async (tx) => {
 			const existingPermission = await tx.permission.findUnique({
 				where: { id },

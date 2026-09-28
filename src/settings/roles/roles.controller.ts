@@ -21,6 +21,7 @@ import {
 	PaginationResponse,
 	PermissionAuth,
 	ResponseHandler,
+	RoleAuth,
 } from "@common";
 import { defaultSort, paginationLength } from "@utils";
 import { RoleDetail, RoleList } from "@repositories";
@@ -31,6 +32,7 @@ import { roleSortableFields, roleFilterableFields } from "@repositories";
 import { I18nService } from "nestjs-i18n";
 
 @Controller("roles")
+@RoleAuth("SUPER_ADMIN")
 @ApiTags("Settings/Roles")
 @ApiBearerAuth("Bearer")
 export class RolesController {

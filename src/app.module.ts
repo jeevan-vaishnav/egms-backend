@@ -13,12 +13,14 @@ import {
 	CommonModule,
 	PermissionGuard,
 	RoleGuard,
+	TenantGuard,
 	ThrottlerModule,
 } from "@common";
 import { PrismaService } from "@repositories";
 import { SettingsModule } from "./settings/settings.module";
 import { HealthModule } from "./health/health.module";
 import { getEnv } from "@config";
+import { InstitutesModule } from "./institutes/institutes.module";
 
 @Module({
 	imports: [
@@ -35,9 +37,9 @@ import { getEnv } from "@config";
 
 		CommonModule,
 		ThrottlerModule,
-
 		AuthModule,
 		HealthModule,
+		InstitutesModule,
 		SettingsModule,
 	],
 	controllers: [AppController],
@@ -49,8 +51,9 @@ import { getEnv } from "@config";
 		AuthStrategy,
 		PrismaService,
 		{ provide: APP_GUARD, useClass: AuthGuard },
+		{ provide: APP_GUARD, useClass: TenantGuard },
 		{ provide: APP_GUARD, useClass: PermissionGuard },
 		{ provide: APP_GUARD, useClass: RoleGuard },
 	],
 })
-export class AppModule {}
+export class AppModule { }

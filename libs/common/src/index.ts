@@ -25,3 +25,9 @@ export * from "./throttler/throttler.module";
 export * from "./types/datatable";
 export * from "./types/pagination";
 export * from "./types/fastify";
+
+
+
+export * from "./tenant/tenant.decorator";
+export * from "./tenant/tenant.guard";
+export * from "./tenant/tenant-auth.decorator";

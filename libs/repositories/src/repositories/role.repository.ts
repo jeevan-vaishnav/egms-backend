@@ -36,9 +36,7 @@ export function RoleRepository(tx?: Prisma.TransactionClient) {
 	return {
 		role: db.role,
 
-		findAll: async (
-			queryParam: DatatableType,
-		): Promise<PaginationResponse<RoleList>> => {
+		findAll: async (queryParam: DatatableType): Promise<PaginationResponse<RoleList>> => {
 			const { page, limit, search, sort, sortDirection } = queryParam;
 			const finalLimit = Number(limit);
 			const finalPage = Number(page);
@@ -48,14 +46,14 @@ export function RoleRepository(tx?: Prisma.TransactionClient) {
 			if (!roleSortableFields.includes(sort)) {
 				throw new BadRequestException(
 					I18nContext.current()?.t("message.common.invalid_sort_field") ??
-						"Invalid sort field",
+					"Invalid sort field",
 				);
 			}
 
 			if (!sortDirectionAllowed.includes(sortDirection)) {
 				throw new BadRequestException(
 					I18nContext.current()?.t("message.common.invalid_sort_direction") ??
-						"Invalid sort direction",
+					"Invalid sort direction",
 				);
 			}
 
@@ -65,147 +63,33 @@ export function RoleRepository(tx?: Prisma.TransactionClient) {
 					if (!roleFilterableFields.includes(key)) {
 						throw new BadRequestException(
 							I18nContext.current()?.t("message.common.invalid_filter_field") ??
-								"Invalid filter field",
+							"Invalid filter field",
 						);
 					}
 				}
 			}
 
-			let whereCondition: Prisma.RoleWhereInput = {};
-			if (search) {
-				whereCondition = {
-					OR: [{ name: { contains: search, mode: "insensitive" } }],
-				};
-			}
+			let whereCondition: Prisma.RoleWhereInput[] = [{}];
+			if (search) whereCondition.push({ name: { contains: search, mode: "insensitive" } });
 
-			let filterCondition: Prisma.RoleWhereInput = {};
-			if (queryParam.filter) {
-				if (queryParam.filter["name"]) {
-					filterCondition = {
-						...filterCondition,
-						name: {
-							contains: queryParam.filter["name"].toString(),
-							mode: "insensitive",
-						},
-					};
-				}
-
-				if (
-					queryParam.filter["createdAt"] &&
-					typeof queryParam.filter["createdAt"] === "string"
-				) {
-					filterCondition = {
-						...filterCondition,
-						createdAt: parseDateRangeFilter(
-							queryParam.filter["createdAt"],
-							"createdAt",
-						),
-					};
-				}
-
-				if (
-					queryParam.filter["updatedAt"] &&
-					typeof queryParam.filter["updatedAt"] === "string"
-				) {
-					filterCondition = {
-						...filterCondition,
-						updatedAt: parseDateRangeFilter(
-							queryParam.filter["updatedAt"],
-							"updatedAt",
-						),
-					};
-				}
-			}
-
-			const where: Prisma.RoleWhereInput = {
-				AND: [whereCondition, filterCondition],
-			};
-
-			const [totalCount, roles] = await Promise.all([
-				db.role.count({ where }),
-				db.role.findMany({
-					where,
-					orderBy: {
-						[sort]: sortDirection,
-					},
-					skip: (finalPage - 1) * finalLimit,
-					take: finalLimit,
-
-					select: {
-						id: true,
-						name: true,
-						createdAt: true,
-						updatedAt: true,
-					},
-				}),
-			]);
-
-			return {
-				data: roles,
-				meta: {
-					limit: finalLimit,
-					page: finalPage,
-					totalCount,
-					totalPages: Math.ceil(totalCount / finalLimit),
-				},
-			};
+			if (queryParam.filter?.name) whereCondition.push({ name: { contains: queryParam.filter.name.toString(), mode: "insensitive" } });
+			if (queryParam.filter?.createdAt && typeof queryParam.filter.createdAt === "string") whereCondition.push({ createdAt: parseDateRangeFilter(queryParam.filter.createdAt, "createdAt") });
+			if (queryParam.filter?.updatedAt && typeof queryParam.filter.updatedAt === "string") whereCondition.push({ updatedAt: parseDateRangeFilter(queryParam.filter.updatedAt, "updatedAt") });
+			const where: Prisma.RoleWhereInput = { AND: whereCondition };
+			const [totalCount, roles] = await Promise.all([db.role.count({ where }), db.role.findMany({ where, orderBy: { [sort]: sortDirection }, skip: (finalPage - 1) * finalLimit, take: finalLimit, select: { id: true, name: true, createdAt: true, updatedAt: true } })]);
+			return { data: roles, meta: { limit: finalLimit, page: finalPage, totalCount, totalPages: Math.ceil(totalCount / finalLimit) } };
 		},
 
-		findOne: async (id: string): Promise<RoleDetail | null> => {
-			const data = await db.role.findFirst({
-				where: { id },
-				select: {
-					id: true,
-					name: true,
-					createdAt: true,
-					updatedAt: true,
-					permissions: {
-						select: {
-							permission: {
-								select: {
-									id: true,
-									name: true,
-									group: true,
-								},
-							},
-						},
-					},
-				},
-			});
-
-			if (!data) {
-				return null;
-			}
-
-			const permissions = await db.permission.findMany({
-				select: {
-					id: true,
-					name: true,
-					group: true,
-				},
-			});
-
+		async findOne(id: string): Promise<RoleDetail | null> {
+			const data = await db.role.findFirst({ where: { id }, select: { id: true, name: true, createdAt: true, updatedAt: true, permissions: { select: { permission: { select: { id: true, name: true, group: true } } } } } });
+			if (!data) return null;
+			const permissions = await db.permission.findMany({ select: { id: true, name: true, group: true } });
 			const groupedPermissions: RoleDetail["permissions"] = {};
 			for (const perm of permissions) {
-				if (!groupedPermissions[perm.group]) {
-					groupedPermissions[perm.group] = [];
-				}
-				const isAssigned = data.permissions.some(
-					(p) => p.permission.id === perm.id,
-				);
-				groupedPermissions[perm.group].push({
-					...perm,
-					isAssigned,
-				});
+				if (!groupedPermissions[perm.group]) groupedPermissions[perm.group] = [];
+				groupedPermissions[perm.group].push({ ...perm, isAssigned: data.permissions.some((p) => p.permission.id === perm.id) });
 			}
-
-			return {
-				id: data.id,
-				name: data.name,
-				createdAt: data.createdAt,
-				updatedAt: data.updatedAt,
-				permissions: groupedPermissions,
-			};
+			return { ...data, permissions: groupedPermissions };
 		},
 	};
 }
