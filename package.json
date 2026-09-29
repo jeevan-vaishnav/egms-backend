@@ -23,8 +23,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prepare": "husky",
-    "seed": "ts-node -r tsconfig-paths/register prisma/seed/index.ts",
-    "seed:file": "ts-node -r tsconfig-paths/register prisma/seed/$FILE.ts",
+    "seed": "tsx prisma/seed/index.ts",
+    "seed:file": "tsx prisma/seed/.ts",
     "dev": "NODE_OPTIONS='-r tsconfig-paths/register' nest start --watch"
   },
   "dependencies": {
