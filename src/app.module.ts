@@ -21,6 +21,7 @@ import { SettingsModule } from "./settings/settings.module";
 import { HealthModule } from "./health/health.module";
 import { getEnv } from "@config";
 import { InstitutesModule } from "./institutes/institutes.module";
+import { AcademicModule } from './academic/academic.module';
 
 @Module({
 	imports: [
@@ -41,6 +42,7 @@ import { InstitutesModule } from "./institutes/institutes.module";
 		HealthModule,
 		InstitutesModule,
 		SettingsModule,
+		AcademicModule,
 	],
 	controllers: [AppController],
 	/* Guard order is the registration order, and it is load-bearing: AuthGuard
