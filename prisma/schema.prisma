@@ -437,7 +437,7 @@ model Program {
 
 model AcademicYear {
   id        String @id @default(uuid()) @db.Uuid
-  name      String @unique @db.VarChar(20)
+  name      String @db.VarChar(20)
   startYear Int
   endYear   Int
 
