@@ -7,4 +7,6 @@ export * from "./institute.repository";
 export * from "./department.repository";
 export * from "./program.repository";
 export * from "./academicyear.repository";
+export * from "./semester.repository";
+
 
