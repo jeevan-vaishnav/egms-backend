@@ -9,4 +9,5 @@ export * from "./program.repository";
 export * from "./academicyear.repository";
 export * from "./semester.repository";
 export * from "./course.repository";
+export * from "./student.repository";
 

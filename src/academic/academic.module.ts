@@ -5,6 +5,7 @@ import { ProgramsModule } from './programs/programs.module';
 import { AcademicYearsModule } from './academic-years/academic-years.module';
 import { SemestersModule } from './semesters/semesters.module';
 import { CoursesModule } from './courses/courses.module';
+import { StudentsModule } from './students/students.module';
 
 @Module({
 	imports: [
@@ -13,6 +14,7 @@ import { CoursesModule } from './courses/courses.module';
 		AcademicYearsModule,
 		SemestersModule,
 		CoursesModule,
+		StudentsModule,
 		RouterModule.register(
 			[
 				{ path: "academic", module: DepartmentsModule },
@@ -20,7 +22,9 @@ import { CoursesModule } from './courses/courses.module';
 				{ path: "academic", module: AcademicYearsModule },
 				{ path: "academic", module: SemestersModule },
 				{ path: "academic", module: CoursesModule },
+				{ path: "academic", module: StudentsModule },
 			]),
+
 
 
 	],

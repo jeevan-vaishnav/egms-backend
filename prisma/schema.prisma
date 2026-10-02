@@ -521,7 +521,7 @@ model Student {
   institute   Institute @relation(fields: [instituteId], references: [id])
 
   // Academic identity
-  studentNumber String @unique @db.VarChar(50)
+  studentNumber String @db.VarChar(50)
 
   firstName String @db.VarChar(100)
   lastName  String @db.VarChar(100)
